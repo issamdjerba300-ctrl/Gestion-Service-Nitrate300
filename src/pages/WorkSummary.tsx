@@ -994,7 +994,7 @@ const WorkSummary = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/home')}
             className="shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1399,8 +1399,8 @@ const WorkSummary = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   Start by adding maintenance works on the main page
                 </p>
-                <Button onClick={() => navigate('/')}>
-                  Go to Main Page
+                <Button onClick={() => navigate('/home')}>
+                  Go to Dashboard
                 </Button>
               </div>
             ) : (

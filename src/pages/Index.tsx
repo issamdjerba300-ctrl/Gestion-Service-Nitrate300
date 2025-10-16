@@ -987,6 +987,13 @@ const Index = () => {
                   >
                     View Summary
                   </Button>
+                  <Button
+                    onClick={() => navigate('/home')}
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
+                    Dashboard
+                  </Button>
                 </div>
               </CardTitle>
             </CardHeader>
