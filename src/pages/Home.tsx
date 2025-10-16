@@ -1,11 +1,31 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart3, Wrench } from "lucide-react";
+import { FileText, BarChart3, Wrench, LogOut } from "lucide-react";
 import ProjectLogo from "@/components/ProjectLogo";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 export default function Home() {
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Success",
+        description: "Logged out successfully",
+      });
+      navigate("/");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to logout",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-6">
@@ -18,6 +38,13 @@ export default function Home() {
               <div>Nitrate Service</div>
             </div>
           </div>
+        </div>
+
+        <div className="absolute top-4 right-4">
+          <Button variant="outline" onClick={handleLogout} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
 
         <div className="text-center mb-12 mt-16">
