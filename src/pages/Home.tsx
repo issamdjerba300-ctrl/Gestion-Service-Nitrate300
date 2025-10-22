@@ -1,24 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart3, Wrench, Calendar, Database } from "lucide-react";
+import { BarChart3, Wrench, Database } from "lucide-react";
 import ProjectLogo from "@/components/ProjectLogo";
 import { toast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [selectedYear, setSelectedYear] = useState<string>(() => {
-    return localStorage.getItem('selectedYear') || new Date().getFullYear().toString();
-  });
-
-  const availableYears = ['2025', '2026', '2027'];
-
-  useEffect(() => {
-    localStorage.setItem('selectedYear', selectedYear);
-  }, [selectedYear]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-gray-100">
@@ -48,26 +37,11 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <Calendar className="h-5 w-5 text-slate-600" />
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[140px] bg-white border-slate-300 shadow-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableYears.map((year) => (
-                  <SelectItem key={year} value={year}>
-                    Year {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
           <Card
             className="bg-white/90 backdrop-blur-sm hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-slate-200 hover:border-blue-400 hover:scale-105"
-            onClick={() => navigate(`/maintenance?year=${selectedYear}`)}
+            onClick={() => navigate('/maintenance')}
           >
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
@@ -88,7 +62,7 @@ export default function Home() {
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/maintenance?year=${selectedYear}`);
+                  navigate('/maintenance');
                 }}
               >
                 Open Module
@@ -160,12 +134,11 @@ export default function Home() {
           <div className="mt-12 max-w-6xl mx-auto">
             <Card className="bg-white/80 backdrop-blur-sm border-slate-200 shadow-sm">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Calendar className="h-5 w-5" />
-                  Year Selection: {selectedYear}
+                <CardTitle className="text-slate-800">
+                  Smart Year Detection
                 </CardTitle>
                 <CardDescription className="text-slate-600">
-                  All modules will use data from the selected year. Change the year using the selector above.
+                  The system automatically determines the correct data source based on the dates you select in each module.
                 </CardDescription>
               </CardHeader>
             </Card>

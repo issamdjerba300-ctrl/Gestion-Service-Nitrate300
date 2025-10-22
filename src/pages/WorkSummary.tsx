@@ -51,10 +51,8 @@ interface CustomText {
 const WorkSummary = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const yearParam = searchParams.get('year') || localStorage.getItem('selectedYear') || new Date().getFullYear().toString();
 
   // State management
-  const [selectedYear, setSelectedYear] = useState<string>(yearParam);
   const [allWorks, setAllWorks] = useState<WorkItem[]>([]);
   const [datesWithWorks, setDatesWithWorks] = useState<string[]>([]);
   const [stats, setStats] = useState<Statistics>({
@@ -90,7 +88,8 @@ const WorkSummary = () => {
 
   const loadDatesWithWorks = async () => {
     try {
-      const dates = await travauxService.getDatesWithWorks(parseInt(selectedYear));
+      const currentYear = new Date().getFullYear();
+      const dates = await travauxService.getDatesWithWorks(currentYear);
       setDatesWithWorks(dates);
     } catch (error) {
       console.error("Error loading dates with works:", error);
@@ -171,6 +170,11 @@ const WorkSummary = () => {
     return uniqueWorks.size;
   };
 
+  // Reload works when date filters change
+  useEffect(() => {
+    loadAllWorks();
+  }, [startDate, endDate]);
+
   // Update statistics when filters or data change
   useEffect(() => {
     const filteredWorks = getSortedAndFilteredWorks();
@@ -230,7 +234,21 @@ const WorkSummary = () => {
 
   const loadAllWorks = async () => {
     try {
-      const worksByDate = await travauxService.getAllWorksByYear(parseInt(selectedYear));
+      let worksByDate: Record<string, WorkItem[]>;
+
+      if (startDate && endDate) {
+        worksByDate = await travauxService.getAllWorksByDateRange(startDate, endDate);
+      } else if (startDate) {
+        const year = startDate.getFullYear();
+        worksByDate = await travauxService.getAllWorksByYear(year);
+      } else if (endDate) {
+        const year = endDate.getFullYear();
+        worksByDate = await travauxService.getAllWorksByYear(year);
+      } else {
+        const currentYear = new Date().getFullYear();
+        worksByDate = await travauxService.getAllWorksByYear(currentYear);
+      }
+
       const allWorksArray: WorkItem[] = [];
 
       Object.keys(worksByDate).forEach(date => {
@@ -519,7 +537,7 @@ const WorkSummary = () => {
     if (!editingWork) return;
 
     try {
-      await travauxService.updateWork(editingWork.id, editingWork, parseInt(selectedYear));
+      await travauxService.updateWork(editingWork.id, editingWork);
 
       await loadAllWorks();
 
@@ -798,7 +816,7 @@ const WorkSummary = () => {
   {/* Bouton retour */}
   <Button
   variant="outline"
-  onClick={() => navigate(`/maintenance?year=${selectedYear}`)}
+  onClick={() => navigate('/maintenance')}
   className="fixed top-16 left-2 z-50 h-12 w-12 rounded-full shadow-md hover:bg-slate-100"
 >
   <ArrowLeft className="h-8 w-8" />
@@ -818,11 +836,6 @@ const WorkSummary = () => {
 </div>
 
 
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-              Year: {selectedYear}
-            </div>
-            </div>
           
           {/* PDF customization section */}
           <Card className="mb-6 bg-white/80 backdrop-blur-sm border-slate-200 shadow-sm w-fit ml-auto">

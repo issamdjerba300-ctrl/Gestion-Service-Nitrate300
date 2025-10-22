@@ -32,10 +32,8 @@ const ErrorBanner: React.FC<ErrorBannerProps> = ({ message }) => (
 const Index = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const yearParam = searchParams.get('year') || localStorage.getItem('selectedYear') || new Date().getFullYear().toString();
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedYear, setSelectedYear] = useState<string>(yearParam);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [sortField, setSortField] = useState<keyof WorkItem | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -50,12 +48,12 @@ const Index = () => {
   useEffect(() => {
     loadWorkItems();
     loadDatesWithWorks();
-  }, [selectedDate, selectedYear]);
+  }, [selectedDate]);
 
   const loadWorkItems = async () => {
     try {
       const dateKey = format(selectedDate, 'yyyy-MM-dd', { locale: fr });
-      const works = await travauxService.getWorksByDate(parseInt(selectedYear), dateKey);
+      const works = await travauxService.getWorksByDate(dateKey);
       setWorkItems(works);
       setError(null);
     } catch (error: any) {
@@ -67,7 +65,8 @@ const Index = () => {
 
   const loadDatesWithWorks = async () => {
     try {
-      const dates = await travauxService.getDatesWithWorks(parseInt(selectedYear));
+      const year = selectedDate.getFullYear();
+      const dates = await travauxService.getDatesWithWorks(year);
       setDatesWithWorks(dates);
     } catch (error) {
       console.error("Error loading dates with works:", error);
@@ -127,7 +126,8 @@ const Index = () => {
 
   const findMostRecentWorkByNumber = async (number: string): Promise<WorkItem | null> => {
     try {
-      return await travauxService.findMostRecentWorkByNumber(number, parseInt(selectedYear));
+      const dateKey = format(selectedDate, 'yyyy-MM-dd', { locale: fr });
+      return await travauxService.findMostRecentWorkByNumber(number, dateKey);
     } catch (error) {
       console.error('Error searching for number:', error);
       return null;
@@ -165,7 +165,8 @@ const Index = () => {
 
   const findMostRecentWorkByReference = async (reference: string): Promise<WorkItem | null> => {
     try {
-      return await travauxService.findMostRecentWorkByReference(reference, parseInt(selectedYear));
+      const dateKey = format(selectedDate, 'yyyy-MM-dd', { locale: fr });
+      return await travauxService.findMostRecentWorkByReference(reference, dateKey);
     } catch (error) {
       console.error('Error searching for reference:', error);
       return null;
@@ -222,13 +223,13 @@ const Index = () => {
 
     try {
       if (isNewWork) {
-        await travauxService.createWork(editingWork, parseInt(selectedYear));
+        await travauxService.createWork(editingWork);
         toast({
           title: "Success",
           description: "Work added successfully",
         });
       } else {
-        await travauxService.updateWork(editingWork.id, editingWork, parseInt(selectedYear));
+        await travauxService.updateWork(editingWork.id, editingWork);
         toast({
           title: "Success",
           description: "Work modified successfully",
@@ -391,7 +392,7 @@ const Index = () => {
       }
 
       if (allImportItems.length > 0) {
-        await travauxService.bulkCreateWorks(allImportItems, parseInt(selectedYear));
+        await travauxService.bulkCreateWorks(allImportItems);
         await loadWorkItems();
         await loadDatesWithWorks();
 
@@ -505,14 +506,11 @@ const Index = () => {
                   </Popover>
 
                   <Button
-                    onClick={() => navigate(`/summary?year=${selectedYear}`)}
+                    onClick={() => navigate('/summary')}
                     className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
                   >
                     View Summary
                   </Button>
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white px-3 py-2 rounded-md border border-slate-200 shadow-sm">
-                    Year: {selectedYear}
-                  </div>
                 </div>
               </CardTitle>
             </CardHeader>
