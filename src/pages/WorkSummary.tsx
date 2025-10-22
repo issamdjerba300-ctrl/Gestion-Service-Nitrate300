@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowLeft, FileText, Download, ChevronUp, ChevronDown, X, Search, Edit2, Trash2, Calendar as CalendarIcon } from "lucide-react";
+import { ArrowLeft, FileText, Download, ChevronUp, ChevronDown, Search, Edit2, Calendar as CalendarIcon } from "lucide-react";
+import { Navbar } from "@/components/Navbar";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,18 +22,8 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import ProjectLogo from "@/components/ProjectLogo";
 import { addLogoToPDF } from "@/utils/dataExport";
-
-// Interface definitions for data structures
-interface WorkItem {
-  id: string;
-  number: string;
-  reference: string;
-  description: string;
-  department: string;
-  status: string;
-  remarks: string;
-  date: string;
-}
+import * as travauxService from "@/services/travauxService";
+import type { WorkItem } from "@/services/travauxService";
 
 interface SortConfig {
   column: keyof WorkItem;
@@ -59,8 +50,11 @@ interface CustomText {
  */
 const WorkSummary = () => {
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const yearParam = searchParams.get('year') || localStorage.getItem('selectedYear') || new Date().getFullYear().toString();
+
   // State management
+  const [selectedYear, setSelectedYear] = useState<string>(yearParam);
   const [allWorks, setAllWorks] = useState<WorkItem[]>([]);
   const [datesWithWorks, setDatesWithWorks] = useState<string[]>([]);
   const [stats, setStats] = useState<Statistics>({
@@ -94,30 +88,12 @@ const WorkSummary = () => {
     loadDatesWithWorks();
   }, []);
 
-  /**
-   * Loads all dates that have work items for calendar highlighting
-   */
   const loadDatesWithWorks = async () => {
     try {
-      const response = await fetch("http://localhost:5000/works");
-      const allWorks = await response.json();
-      setDatesWithWorks(
-        Object.keys(allWorks).filter(date => allWorks[date] && allWorks[date].length > 0)
-      );
+      const dates = await travauxService.getDatesWithWorks(parseInt(selectedYear));
+      setDatesWithWorks(dates);
     } catch (error) {
       console.error("Error loading dates with works:", error);
-      // Fallback to localStorage
-      const savedData = localStorage.getItem("maintenance-works");
-      if (savedData) {
-        try {
-          const allWorks = JSON.parse(savedData);
-          setDatesWithWorks(
-            Object.keys(allWorks).filter(date => allWorks[date] && allWorks[date].length > 0)
-          );
-        } catch (e) {
-          console.error("Error parsing localStorage:", e);
-        }
-      }
     }
   };
 
@@ -252,13 +228,9 @@ const WorkSummary = () => {
     }
   }, [searchQuery, activeFilters, startDate, endDate, activeDepartmentFilters]);
 
-  /**
-   * Loads all works from backend and calculates initial statistics
-   */
   const loadAllWorks = async () => {
     try {
-      const response = await fetch('http://localhost:5000/works');
-      const worksByDate = await response.json();
+      const worksByDate = await travauxService.getAllWorksByYear(parseInt(selectedYear));
       const allWorksArray: WorkItem[] = [];
 
       Object.keys(worksByDate).forEach(date => {
@@ -267,7 +239,6 @@ const WorkSummary = () => {
 
       setAllWorks(allWorksArray);
 
-      // Calculate initial statistics
       const totalWorks = allWorksArray.length;
       const completed = allWorksArray.filter(w => w.status === 'Completed').length;
       const pending = allWorksArray.filter(w => w.status === 'Pending').length;
@@ -278,34 +249,7 @@ const WorkSummary = () => {
 
       setStats({ totalWorks, completed, pending, inProgress, onHold, cancelled, dates });
     } catch (error) {
-      console.error('Error loading data from backend:', error);
-      // Fallback to localStorage
-      const savedData = localStorage.getItem('maintenance-works');
-      if (savedData) {
-        try {
-          const worksByDate = JSON.parse(savedData);
-          const allWorksArray: WorkItem[] = [];
-
-          Object.keys(worksByDate).forEach(date => {
-            allWorksArray.push(...worksByDate[date]);
-          });
-
-          setAllWorks(allWorksArray);
-
-          // Calculate statistics for localStorage data
-          const totalWorks = allWorksArray.length;
-          const completed = allWorksArray.filter(w => w.status === 'Completed').length;
-          const pending = allWorksArray.filter(w => w.status === 'Pending').length;
-          const inProgress = allWorksArray.filter(w => w.status === 'In Progress').length;
-          const onHold = allWorksArray.filter(w => w.status === 'On Hold').length;
-          const cancelled = allWorksArray.filter(w => w.status === 'Cancelled').length;
-          const dates = Object.keys(worksByDate).length;
-
-          setStats({ totalWorks, completed, pending, inProgress, onHold, cancelled, dates });
-        } catch (error) {
-          console.error('Error loading data from localStorage:', error);
-        }
-      }
+      console.error('Error loading data:', error);
     }
   };
 
@@ -571,187 +515,47 @@ const WorkSummary = () => {
     setIsEditDialogOpen(true);
   };
 
-  /**
-   * Saves edited work item to backend
-   */
   const handleSaveEdit = async () => {
     if (!editingWork) return;
 
     try {
-      console.log("📡 Starting edit process...");
+      await travauxService.updateWork(editingWork.id, editingWork, parseInt(selectedYear));
 
-      // 1. Get existing data
-      const response = await fetch('http://localhost:5000/works');
-      
-      if (!response.ok) {
-        throw new Error(`Backend error: ${response.status} ${response.statusText}`);
-      }
-      
-      const allWorksFromBackend = await response.json();
-      console.log("✅ Data retrieved, number of dates:", Object.keys(allWorksFromBackend).length);
-
-      // 2. Find and update the item
-      let found = false;
-      let updatedDateKey = '';
-      
-      Object.keys(allWorksFromBackend).forEach(dateKey => {
-        const dayWorks = allWorksFromBackend[dateKey] || [];
-        const workIndex = dayWorks.findIndex((w: WorkItem) => w.id === editingWork.id);
-        
-        if (workIndex >= 0) {
-          console.log(`📍 Item found at index ${workIndex} for ${dateKey}`);
-          allWorksFromBackend[dateKey][workIndex] = editingWork;
-          found = true;
-          updatedDateKey = dateKey;
-        }
-      });
-
-      if (!found) {
-        console.warn("❌ Item not found - ID:", editingWork.id);
-        toast({
-          title: "❌ Item not found",
-          description: `Cannot find item ${editingWork.number} in backend`,
-          variant: "destructive"
-        });
-        return; // Stop here
-      }
-
-      // 3. Prepare data to send
-      const dataToSend = {
-        [updatedDateKey]: allWorksFromBackend[updatedDateKey]
-      };
-
-      console.log(`📦 Sending data for ${updatedDateKey}`);
-      
-      // 4. Send modifications
-      const saveResponse = await fetch('http://localhost:5000/works', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataToSend),
-      });
-
-      if (!saveResponse.ok) {
-        const errorText = await saveResponse.text();
-        throw new Error(`Save failed: ${saveResponse.status} - ${errorText}`);
-      }
-
-      // 5. SUCCESS - Update local state
-      console.log("✅ Save successful, updating local state...");
-      
-      const updatedWorksArray: WorkItem[] = [];
-      Object.keys(allWorksFromBackend).forEach(date => {
-        updatedWorksArray.push(...(allWorksFromBackend[date] || []));
-      });
-      
-      setAllWorks(updatedWorksArray);
-
-      // Recalculate statistics
-      const uniqueDates = [...new Set(updatedWorksArray.map(work => work.date))];
-      const totalWorks = updatedWorksArray.filter(w => w.status !== 'On Hold').length;
-      const completed = updatedWorksArray.filter(w => w.status === 'Completed').length;
-      const pending = updatedWorksArray.filter(w => w.status === 'Pending').length;
-      const inProgress = countUniqueInProgressWorks2(updatedWorksArray);
-      const onHold = updatedWorksArray.filter(w => w.status === 'On Hold').length;
-      const cancelled = updatedWorksArray.filter(w => w.status === 'Cancelled').length;
-      const dates = uniqueDates.length;
-
-      setStats({ totalWorks, completed, pending, inProgress, onHold, cancelled, dates });
+      await loadAllWorks();
 
       toast({
-        title: "✅ Success",
+        title: "Success",
         description: `Item ${editingWork.number} modified successfully`,
       });
 
-    } catch (error) {
-      // 🔴 DETAILED ERROR HANDLING
-      console.error('💥 Complete error:', error);
-      
-      let errorTitle = "❌ Error";
-      let errorDescription = "An error occurred during modification";
-
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorTitle = "🔴 Connection impossible";
-        errorDescription = "Cannot contact server - please verify it's running";
-      } else if (error.message.includes('Backend error')) {
-        errorTitle = "🔴 Server error";
-        errorDescription = `Server returned error: ${error.message}`;
-      } else if (error.message.includes('Save failed')) {
-        errorTitle = "❌ Save failed";
-        errorDescription = "Changes could not be saved";
-      } else if (error.message.includes('Unexpected token')) {
-        errorTitle = "📄 Invalid data format";
-        errorDescription = "Data received from server is corrupted";
-      }
+    } catch (error: any) {
+      console.error('Error saving:', error);
 
       toast({
-        title: errorTitle,
-        description: errorDescription,
+        title: "Error",
+        description: error.message || "Failed to save changes",
         variant: "destructive"
       });
     } finally {
-      // Always close dialog
       setIsEditDialogOpen(false);
       setEditingWork(null);
     }
   };
 
-  /**
-   * Deletes a work item from backend and local state
-   */
   const handleDeleteWork = async (workId: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/works/${workId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setAllWorks(current => current.filter(work => work.id !== workId));
-
-        // Recalculate statistics immediately after deletion
-        const updatedWorks = allWorks.filter(work => work.id !== workId);
-        const uniqueDates = [...new Set(updatedWorks.map(work => work.date))];
-
-        const totalWorks = updatedWorks.length;
-        const completed = updatedWorks.filter(w => w.status === 'Completed').length;
-        const pending = updatedWorks.filter(w => w.status === 'Pending').length;
-        const inProgress = updatedWorks.filter(w => w.status === 'In Progress').length;
-        const onHold = updatedWorks.filter(w => w.status === 'On Hold').length;
-        const cancelled = updatedWorks.filter(w => w.status === 'Cancelled').length;
-        const dates = uniqueDates.length;
-
-        setStats({ totalWorks, completed, pending, inProgress, onHold, cancelled, dates });
-
-        toast({
-          title: "Success",
-          description: "Work item deleted successfully",
-        });
-      } else {
-        throw new Error('Backend deletion failed');
-      }
-    } catch (error) {
-      console.error('Error during deletion:', error);
-      // Fallback: remove from local state only
-      setAllWorks(current => current.filter(work => work.id !== workId));
-
-      // Recalculate statistics for localStorage fallback
-      const updatedWorks = allWorks.filter(work => work.id !== workId);
-      const uniqueDates = [...new Set(updatedWorks.map(work => work.date))];
-
-      const totalWorks = updatedWorks.length;
-      const completed = updatedWorks.filter(w => w.status === 'Completed').length;
-      const pending = updatedWorks.filter(w => w.status === 'Pending').length;
-      const inProgress = updatedWorks.filter(w => w.status === 'In Progress').length;
-      const onHold = updatedWorks.filter(w => w.status === 'On Hold').length;
-      const cancelled = updatedWorks.filter(w => w.status === 'Cancelled').length;
-      const dates = uniqueDates.length;
-
-      setStats({ totalWorks, completed, pending, inProgress, onHold, cancelled, dates });
+      await travauxService.deleteWork(workId);
+      await loadAllWorks();
 
       toast({
-        title: "Locally deleted",
-        description: "Item removed from current view. Backend unavailable.",
+        title: "Success",
+        description: "Work item deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error during deletion:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete work",
         variant: "destructive"
       });
     }
@@ -976,10 +780,12 @@ const WorkSummary = () => {
   };
   
   return (
-    <div className="min-h-screen bg-background p-4 pb-24">
-      <div className="container mx-auto max-w-7xl">
-        {/* Logo positioned at top left */}
-        <div className="absolute top-4 left-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-emerald-50">
+      <Navbar />
+      <div className="pt-20 pb-24 px-4">
+        <div className="container mx-auto max-w-7xl">
+          {/* Logo positioned at top left */}
+        <div className="absolute top-20 left-6">
           <div className="flex flex-col items-start gap-1">
             <ProjectLogo size="large" />
             <div className="text-sm text-muted-foreground font-medium leading-tight">
@@ -988,32 +794,38 @@ const WorkSummary = () => {
             </div>
           </div>
         </div>
+         <div className="text-center mb-8 relative">
+  {/* Bouton retour */}
+  <Button
+  variant="outline"
+  onClick={() => navigate(`/maintenance?year=${selectedYear}`)}
+  className="fixed top-16 left-2 z-50 h-12 w-12 rounded-full shadow-md hover:bg-slate-100"
+>
+  <ArrowLeft className="h-8 w-8" />
+</Button>
 
-        {/* Header with spacing for top-left logo */}
-        <div className="text-center mb-8 mt-16">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/home')}
-            className="shrink-0"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+  {/* Titre central */}
+  <div className="mb-8"></div>
+  <h1 className="text-4xl md:text-5xl font-bold text-slate-800 mb-2">
+    Work Summary
+  </h1>
+  <p className="text-slate-600 text-lg">
+    Overview of all registered maintenance works
+  </p>
+  <p className="text-slate-500 text-sm mt-1">
+    Ammonitrate Plant - Nitrate Service
+  </p>
+</div>
 
-          <div className="flex-1">
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-              Work Summary
-            </h1>
-            <p className="text-muted-foreground">
-              Overview of all registered maintenance works
-            </p>
-          </div>
+
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
+              Year: {selectedYear}
+            </div>
+            </div>
           
-          {/* Space between header and PDF section */}
-          <div className="mb-8"></div>
-
           {/* PDF customization section */}
-          <Card className="mb-6 bg-gradient-to-r from-blue-50 to-sky-50 border-blue-200 w-fit ml-auto">
+          <Card className="mb-6 bg-white/80 backdrop-blur-sm border-slate-200 shadow-sm w-fit ml-auto">
             <CardContent className="p-4">
               <div className="flex flex-col items-end gap-3">
                 <div className="flex items-center gap-2">
@@ -1050,72 +862,72 @@ const WorkSummary = () => {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6">
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Interventions</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Interventions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalWorks}</div>
+              <div className="text-2xl font-bold text-slate-800">{stats.totalWorks}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Completed</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">In Progress</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Start</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Start</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Immediate</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Immediate</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Requested</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Requested</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">{stats.onHold}</div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Work Days</CardTitle>
+              <CardTitle className="text-sm font-medium text-slate-600">Work Days</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.dates}</div>
+              <div className="text-2xl font-bold text-slate-800">{stats.dates}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Filter Controls */}
-        <Card className="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-100">
+        <Card className="mb-6 bg-white/90 backdrop-blur-sm border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Search & Filter</CardTitle>
           </CardHeader>
@@ -1362,7 +1174,7 @@ const WorkSummary = () => {
         </Card>
 
         {/* All Works Table */}
-        <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100">
+        <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-md">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -1607,19 +1419,19 @@ const WorkSummary = () => {
       </Dialog>
 
       {/* Professional Signature */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border py-2 px-2 z-50 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-slate-200 py-3 px-4 z-40 shadow-lg">
         <div className="container mx-auto max-w-7xl">
-          <div className="flex justify-between items-end">
+          <div className="flex justify-between items-center">
             <div className="flex items-baseline gap-2">
-              <p className="text-muted-foreground text-base tracking-wide">
+              <p className="text-slate-700 text-base font-medium tracking-wide">
                 Issam Ben Ammar
               </p>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider">
+              <p className="text-slate-500 text-xs uppercase tracking-wider">
                 Production Engineer
               </p>
             </div>
-            <div className="text-foreground font-medium text-base tracking-wide">
-              {format(new Date(), 'EEEE .    do MMMM   yyyy', { locale: fr })}
+            <div className="text-slate-700 font-medium text-base tracking-wide">
+              {format(new Date(), 'EEEE, do MMMM yyyy', { locale: fr })}
             </div>
           </div>
         </div>

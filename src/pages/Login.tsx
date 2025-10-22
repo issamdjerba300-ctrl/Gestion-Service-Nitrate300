@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const Login = () => {
   const navigate = useNavigate();
   const { signIn, user } = useAuth();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -23,10 +23,10 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email.trim() || !password.trim()) {
+    if (!username.trim() || !password.trim()) {
       toast({
         title: "Error",
-        description: "Please enter both email and password",
+        description: "Please enter both username and password",
         variant: "destructive"
       });
       return;
@@ -34,7 +34,7 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(username, password);
       toast({
         title: "Success",
         description: "Login successful",
@@ -43,7 +43,7 @@ const Login = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Invalid email or password",
+        description: error.message || "Invalid username or password",
         variant: "destructive"
       });
     } finally {
@@ -52,34 +52,35 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-4 text-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-gray-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl border-slate-200 bg-white/95 backdrop-blur-sm">
+        <CardHeader className="space-y-4 text-center pb-6">
           <div className="flex justify-center mb-4">
             <ProjectLogo size="large" />
           </div>
-          <CardTitle className="text-2xl font-bold">Technical Shutdown AT2025</CardTitle>
-          <CardDescription className="text-base">
+          <CardTitle className="text-3xl font-bold text-slate-800">Technical Shutdown AT2025</CardTitle>
+          <CardDescription className="text-base text-slate-600">
             Ammonitrate Plant - Nitrate Service
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+        <CardContent className="pt-2">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
+              <label htmlFor="username" className="text-sm font-medium text-slate-700">
+                Username
               </label>
               <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 disabled={isLoading}
+                className="border-slate-300 focus:border-blue-500"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
+              <label htmlFor="password" className="text-sm font-medium text-slate-700">
                 Password
               </label>
               <Input
@@ -89,9 +90,10 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
+                className="border-slate-300 focus:border-blue-500"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-11" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
